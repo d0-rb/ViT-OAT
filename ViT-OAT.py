@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torch.optim import SGD, Adam, lr_scheduler
 
 from models.cifar10.resnet_OAT import ResNet34OAT
-from AViT_OAT import ACTVisionTransformer
+from AViT_OAT import avit_tiny_patch16_32
 from models.svhn.wide_resnet_OAT import WRN16_8OAT
 from models.stl10.wide_resnet_OAT import WRN40_2OAT
 
@@ -48,6 +48,12 @@ parser.add_argument('--use2BN', action='store_true', help='If true, use dual BN'
 parser.add_argument('--sampling', default='ew', choices=['ew', 'bw'], help='sampling scheme for Lambda')
 # others:
 parser.add_argument('--resume', action='store_true', help='If true, resume from early stopped ckpt')
+
+parser.add_argument('--act_mode', default=4, choices=[1, 2, 3, 4], help='ACT mode (only 4 supported)')
+parser.add_argument('--distr_prior_alpha', default=0.01, type=float, help="scaling for kl of distributional prior")
+parser.add_argument('--gate_scale', default=100., type=float, help="constant for token control gate rescale")
+parser.add_argument('--gate_center', default= 3., type=float, help="constant for token control gate re-center, negatived when applied")
+
 args = parser.parse_args()
 args.efficient = True
 print(args)
@@ -69,12 +75,13 @@ if args.encoding in ['onehot', 'dct', 'rand']:
 else: # non encoding
     FiLM_in_channels = 1
 if args.dataset == 'cifar10':
-    model_fn = ResNet34OAT
+    # model_fn = ResNet34OAT
+    model_fn = avit_tiny_patch16_32
 elif args.dataset == 'svhn':
     model_fn = WRN16_8OAT
 elif args.dataset == 'stl10':
     model_fn = WRN40_2OAT
-model = model_fn(use2BN=args.use2BN, FiLM_in_channels=FiLM_in_channels).cuda()
+model = model_fn(use2BN=args.use2BN, FiLM_in_channels=FiLM_in_channels, args=args).cuda()
 model = torch.nn.DataParallel(model)
 # for name, p in model.named_parameters():
 #     print(name, p.size())
@@ -97,9 +104,9 @@ if args.probs > 0:
     lambda_str += '-%s' % args.probs
 if args.encoding in ['onehot', 'dct', 'rand']:
     lambda_str += '-%s-d%s' % (args.encoding, args.dim)
-save_folder = os.path.join('/home/henry/ViT-OAT/OAT_results', 'cifar10', model_str, '%s_%s_%s_%s' % (attack_str, opt_str, decay_str, lambda_str))
+save_folder = os.path.join('/home/henry/ViT-OAT/ViT_OAT_results', 'cifar10', model_str, '%s_%s_%s_%s' % (attack_str, opt_str, decay_str, lambda_str))
 print(save_folder)
-create_dir(save_folder)
+create_dir(save_folder)R
 
 # encoding matrix:
 if args.encoding == 'onehot':

@@ -56,3 +56,30 @@ class SlimmableFiLM_Layer(nn.Module):
         _output = _input * mu.view(N, C, 1, 1).expand_as(_input) + sigma.view(N, C, 1, 1).expand_as(_input)
         return _output
 
+
+class FiLM_ViT_Layer(nn.Module):
+    def __init__(self, embed_dim, in_channels=1, alpha=1, activation=F.leaky_relu):
+        '''
+        input size: (batch, patch, in_channels). output size: (batch, patch, embed_dim)
+        
+        Args:
+            embed_dim: int.
+            alpha: scalar. Expand ratio for FiLM hidden layer.
+        '''
+        super(FiLM_ViT_Layer, self).__init__()
+        self.channels = embed_dim
+        self.activation = activation
+        self.MLP = nn.Sequential(
+            nn.Linear(in_channels, alpha*self.channels*2, bias=True), 
+            nn.LeakyReLU(inplace=True),
+            nn.Linear(alpha*self.channels*2, self.channels*2, bias=True), 
+        )
+        
+    def forward(self, _input, _lambda):
+        B, N, C = _input.size()
+        out = self.MLP(_lambda.expand((-1, N, -1)))
+        self.mu, self.sigma = torch.split(out, [self.channels, self.channels], dim=-1)
+        if self.activation is not None:
+            self.mu, self.sigma = self.activation(self.mu), self.activation(self.sigma)
+        _output = _input * self.mu.view(B, N, C) + self.sigma.view(B, N, C)
+        return _output

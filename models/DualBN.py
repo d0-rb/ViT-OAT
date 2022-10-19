@@ -35,6 +35,39 @@ class DualBN2d(nn.Module):
         return _output
 
 
+class DualLN(nn.Module):
+    '''
+    Dual LN implementation
+    '''
+    def __init__(self, normalized_shape, **kwargs):
+        '''
+        Args:
+            normalized_shape: (int or list or torch.Size). Input shape from an expected input size
+        '''
+        super(DualLN, self).__init__()
+        self.LN_c = nn.LayerNorm(normalized_shape, **kwargs)
+        self.LN_a = nn.LayerNorm(normalized_shape, **kwargs)
+
+    def forward(self, _input, idx):
+        '''
+        Args:
+            _input: Tensor. size=(B, N, C), (batch, patch, embed_dim)
+            idx: int. _input[0:idx,...] -> _lambda=0 -> LN_c; _input[idx:,...] -> _lambda!=0 -> LN_a
+        
+        Returns:
+            _output: Tensor. size=(B, N, C)
+        '''
+        if idx == 0:
+            _output = self.LN_a(_input)
+        elif idx == _input.size()[0]:
+            _output = self.LN_c(_input)
+        else:
+            _output_c = self.LN_c(_input[0:idx,...]) # LN cannot take tensor with N=0
+            _output_a = self.LN_a(_input[idx:,...])
+            _output = torch.cat([_output_c, _output_a], dim=0)
+        return _output
+
+
 class SwitchableDualBN2d(nn.Module):
     def __init__(self, num_features_list):
         super(SwitchableDualBN2d, self).__init__()
